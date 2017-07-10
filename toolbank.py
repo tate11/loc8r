@@ -4,14 +4,14 @@
 
 import sys, os, json, urllib2, re, csv
 import HTMLParser
-import logging
-import logging.config
+#import logging
+#import logging.config
 from heavins.woo import WooCommerceClient
 from mapper import ImageMapper
 
-logger = logging.getLogger("toolbank-process")
-logging.getLogger("requests").setLevel(logging.CRITICAL)
-logging.getLogger("zeep").setLevel(logging.CRITICAL)
+#logger = logging.getLogger("toolbank-process")
+#logging.getLogger("requests").setLevel(logging.CRITICAL)
+#logging.getLogger("zeep").setLevel(logging.CRITICAL)
 
 class ToolBankSyncer:
 
@@ -58,11 +58,12 @@ class ToolBankSyncer:
 			if "id" in inserted:
 				cid = inserted["id"] if "id" in inserted else category["data"]["resource_id"]
 			else:
-				logger.debug("Could NOT create >>%s<< ", main_cat)
+				#logger.debug("Could NOT create >>%s<< ", main_cat)
 				print "Could not create ", main_cat
 				sys.exit(1)
 		insertedCat = []
-		#print main_cat, cid
+		temp = 0
+		# print main_cat, cid, len(products)
 		productFiltered = []
 		for product in products:
 			withCommas = re.findall(r'"(.*?)"', product, re.DOTALL)
@@ -72,9 +73,12 @@ class ToolBankSyncer:
 			product = product.strip().split(",")
 			plen = len(product)
 			for i in range(plen):
-				product[i] = product[i].replace("__C__", ",").replace('"', '')
+				product[i] = product[i].replace("__C__", ",").replace('"', '').replace("\xc2\xae", "")
 			productFiltered.append(product)
 			cat_id = cid
+			print product
+			print temp
+			temp = temp + 1
 			# Adding Category and Sub Category
 			for k in catKeys:
 				thisCat = product[k].strip()
@@ -84,27 +88,30 @@ class ToolBankSyncer:
 					continue
 				try:
 					cat_id = inCategories[cname]
+					print cname, " in list"
 					continue
-				except KeyError:
+				except KeyValue:
+					# print e
 					pass
 
 				cat_dump = {"parent": cat_id, "name": cname, "slug": cslug}
 				subCatIn = self.woocom.create_product_category(cat_dump)
 				if "id" in subCatIn:
-					logger.debug("\tCreated >>%s<<", cname)
+					#logger.debug("\tCreated >>%s<<", cname)
 					insertedCat.append(cslug)
 					cat_id = subCatIn["id"]
 					print "inserted ", cname, " at ", cat_id
 				else:
-					logger.debug("\tCould Not create >>%s<<", cname)
+					#logger.debug("\tCould Not create >>%s<<", cname)
 					print "Failed: Already in db ", cname
+		print "Category imported..."
 		return productFiltered
 
 	def import_toolbank_products(self):
 		""" Read CSV from FTP and import data to heavins  """
 		availibility = []
-		# fileLines = self.get_export_file('Availability01.csv')[1:]
-		fileLines = []
+		fileLines = self.get_export_file('Availability01.csv')[1:]
+		# fileLines = []
 		for line in fileLines:
 			line = line.split(",")
 			code = line[0].strip(" ")
@@ -129,16 +136,19 @@ class ToolBankSyncer:
 		finalCategories = self.get_categories_lookup_table()
 		len_a = len(availibility)
 		len_d = len(products)
-		inUseKeys = ["Product_Name", "CurrentListPrice", "ImageRef", "ProductDescription", "GroupDescription", "StockCode", "Brand_Name", "AnalysisKey1", "AnalysisKey2", "ClassAName", "ClassBName", "ClassCName", "ClassDName"]
-
+		# inUseKeys = ["Product_Name", "CurrentListPrice", "ImageRef", "ProductDescription", "GroupDescription", "StockCode", "Brand_Name", "AnalysisKey1", "AnalysisKey2", "ClassAName", "ClassBName", "ClassCName", "ClassDName"]
+		testC = 0
+		print len_a, " product available in ", len_d
 		for product in products:
 			stockCode = product[0]
 			if stockCode not in availibility:
 				continue
+			print stockCode
 			name = product[keys.index("Product_Name")]
 			slug = name.lower().replace(" ", "-")
 			price = product[keys.index("CurrentListPrice")]
 			cats = [{"id": finalCategories["TRADE AREA"]}]
+			print cats
 			for ckey in inCatKeys:
 				ctname = product[ckey].strip().upper()
 				try:
@@ -164,11 +174,17 @@ class ToolBankSyncer:
 				"description": description,
 				"images": imagery
 			}
+			if testC < 10:
+				print prodData
+				testC = testC+1
+				continue
+			else:
+				sys.exit(1)
 
 			try:
 				insertedProduct = self.woocom.create_product(prodData)
 			except Exception:
-				logger.exception("Data %s", data)
+				pass #logger.exception("Data %s", data)
 
 
 
@@ -190,19 +206,19 @@ def main():
 		config_path, _ = os.path.split(os.path.abspath(__file__))
 		with open("{0}/config.json".format(config_path)) as config:
 			config = json.load(config)
-			logging.config.dictConfig(config["logging"])
+			#logging.config.dictConfig(config["logging"])
 	except (IOError, Exception) as e:
 		print "Error loading config: {0}".format(e)
 		sys.exit(1)
 
 
 	try:
-		logger.info("*** Starting Toolbank Sync ***")
+		#logger.info("*** Starting Toolbank Sync ***")
 		print "Starting Export"
 		sync_toolbank(config)
-		logger.info("*** ToolBank Sync Completed ***")
+		#logger.info("*** ToolBank Sync Completed ***")
 	except Exception as e:
-		logger.exception("Error syncing Toolbank: %s", e)
+		pass #logger.exception("Error syncing Toolbank: %s", e)
 
 
 if __name__ == '__main__':
